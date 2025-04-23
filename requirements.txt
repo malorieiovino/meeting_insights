@@ -1,9 +1,9 @@
+streamlit
+datasets
+sentence-transformers
+scikit-learn
 numpy
 pandas
-scikit-learn
-sentence-transformers
-wordcloud
 matplotlib
-regex
-streamlit
+wordcloud
 
