@@ -16,7 +16,7 @@ This repo contains both the core processing library (`meeting_insights.py`) and 
 - **Topic segmentation**: Sliding-window TF-IDF cosine drops with minimum-segment-size smoothing.  
 - **Extractive summarization**: TF-IDF / position / speaker novelty-based scoring.  
 - **Action-item extraction**: Regex + lightweight POS filters → owner resolution → priority/deadline estimation → confidence scoring.  
-- **Interactive demo**: View topic word-clouds, summaries, action-items tables.  
+- **Interactive demo**: View topic word-clouds, summaries, action-items tables.  ....
 
 ---
 
