@@ -2,12 +2,13 @@
 import streamlit as st
 import pandas as pd
 import re
-from datasets import load_dataset
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
+import os
+import pickle
 
 # Download once on first run
 nltk.download('punkt')
@@ -63,9 +64,11 @@ def generate_extractive_summary(segments, top_n=3):
 # —— Dataset & preprocessing —— 
 @st.cache_data(show_spinner=False)
 def load_ami_dataset():
-    ds = load_dataset("edinburghcstr/ami", "ihm", trust_remote_code=True)
-    return ds['train']
-
+	here = os.path.dirname(__file__)
+	fp = os.path.join(here, "data", "ami_processed_meetings_fast.pkl")
+	with open(fp, "rb") as f:
+		records = pickle.load(f)
+	return records
 def clean_segment_text(text):
     text = ANNOT_RE.sub("", text)
     text = FILLER_RE.sub("", text)

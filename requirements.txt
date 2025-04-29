@@ -1,6 +1,5 @@
 streamlit>=1.25
 pandas>=2.0
-datasets
 sentence-transformers
 scikit-learn
 nltk
