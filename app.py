@@ -1,103 +1,91 @@
-# app.py
-import streamlit as st
+import os
 import pandas as pd
-import re
+import streamlit as st
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import nltk
-import os
-import pickle
 
-# Download once on first run
-nltk.download('punkt')
-nltk.download('stopwords')
+# ─── Load our tiny demo CSV ────────────────────────────────────────────────
+@st.cache_data(show_spinner=False)
+def load_ami_dataset():
+    """
+    Read the five-column CSV we committed:
+      meeting_id,speaker,begin_time,end_time,text_clean
+    """
+    path = os.path.join(os.path.dirname(__file__), "data", "sample_meeting.csv")
+    df   = pd.read_csv(path)
+    # Convert each row back into a dict for compatibility
+    return df.to_dict(orient="records")
 
-# —— Text‐cleaning regexes —— 
-FILLERS = {
-    'um','uh','hmm','yeah','right','so','okay','okay?','you know',
-    'like','i mean','er','ah','mm','ahh','mmm','huh','kay','uhh','umm','well'
-}
-FILLER_RE = re.compile(r'\b(' + '|'.join(map(re.escape, FILLERS)) + r')\b',
-                       flags=re.IGNORECASE)
-ANNOT_RE = re.compile(r'\[.*?\]|\(.*?\)')
+# ─── Helpers to slice out one meeting ──────────────────────────────────────
+@st.cache_data
+def get_meeting_segments(meeting_id: str):
+    records = load_ami_dataset()
+    segs = [r for r in records if r["meeting_id"] == meeting_id]
+    if not segs:
+        st.warning(f"⚠️ No segments found for meeting_id={meeting_id}")
+    return segs
 
-# —— Feature‐based extractive summary (from your notebook) —— 
-action_keywords = ['will', 'need to', 'going to', 'must', 'should', 'action', 'task', 'due']
+# ─── Extractive summarization utilities ──────────────────────────────────
+action_keywords = ['will','need to','going to','must','should','action','task','by','due']
 
 def extract_features(segments):
-    texts = [seg['text_clean'] for seg in segments]
-    vect  = TfidfVectorizer(stop_words='english')
+    texts = [s["text_clean"] for s in segments]
+    vect  = TfidfVectorizer(stop_words="english")
     tfidf = vect.fit_transform(texts).toarray()
     doc_vec = tfidf.mean(axis=0).reshape(1, -1)
     sims = cosine_similarity(tfidf, doc_vec).flatten()
 
-    features = []
+    feats = []
     for i, seg in enumerate(segments):
-        f = {
-            'idx':         i,
-            'length':      len(seg['text_clean'].split()),
-            'sim':         sims[i],
-            'contains_a':  any(kw in seg['text_clean'].lower() for kw in action_keywords),
-            'is_new_spkr': i == 0 or seg['speaker'] != segments[i-1]['speaker']
-        }
-        features.append(f)
-    return features
+        feats.append({
+            "idx":        i,
+            "length":     len(seg["text_clean"].split()),
+            "sim":        sims[i],
+            "contains_a": any(k in seg["text_clean"].lower() for k in action_keywords),
+            "is_new_spkr": i == 0 or seg["speaker"] != segments[i-1]["speaker"]
+        })
+    return feats
 
-def generate_extractive_summary(segments, top_n=3):
+def generate_extractive_summary(segments, top_n):
+    """
+    Score each segment by a mixture of similarity-to-document, length,
+    presence of action-keywords, and speaker-change, then pick top_n.
+    """
+    if not segments:
+        return []
     feats = extract_features(segments)
-    scores = []
-    for f in feats:
-        sc = (
-            0.4 * f['sim'] +
-            0.3 * min(f['length']/20, 1.0) +
-            0.2 * int(f['contains_a']) +
-            0.1 * int(f['is_new_spkr'])
+    scores = [
+        (
+            f["idx"],
+            0.4*f["sim"]
+          + 0.3*min(f["length"]/20, 1.0)
+          + 0.2*int(f["contains_a"])
+          + 0.1*int(f["is_new_spkr"])
         )
-        scores.append((f['idx'], sc))
+        for f in feats
+    ]
     ranked = sorted(scores, key=lambda x: x[1], reverse=True)
-    top_idxs = [idx for idx,_ in ranked[:top_n]]
-    top_idxs.sort()
+    top_idxs = sorted(idx for idx, _ in ranked[:top_n])
     return [segments[i] for i in top_idxs]
 
-# —— Dataset & preprocessing —— 
+# ─── Clustering into topics ────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
-def load_ami_dataset():
-    # Read our small sample CSV instead of unpickling
-    df = pd.read_csv("data/sample_meeting.csv")
-    # Convert to list of dicts for downstream code
-    return df.to_dict(orient="records")
-	
-def clean_segment_text(text):
-    text = ANNOT_RE.sub("", text)
-    text = FILLER_RE.sub("", text)
-    return text.strip()
-
-@st.cache_data
-def get_meeting_segments(meeting_id):
-    train = load_ami_dataset()
-    raw = [item for item in train if item['meeting_id']==meeting_id]
-    segments = []
-    for seg in raw:
-        segments.append({
-            'speaker':    seg.get('speaker', 'UNK'),
-            'begin_time': seg.get('begin_time', 0.0),
-            'end_time':   seg.get('end_time', 0.0),
-            'text_clean': clean_segment_text(seg['text'])
-        })
-    return segments
-
-@st.cache_data
 def cluster_into_topics(segments, n_topics):
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    texts = [seg['text_clean'] for seg in segments]
-    embeddings = model.encode(texts, convert_to_tensor=True).cpu().numpy()
-    km = KMeans(n_clusters=n_topics, random_state=42)
-    labels = km.fit_predict(embeddings)
+    if not segments:
+        return []
+    # Embed & cluster
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    texts = [s["text_clean"] for s in segments]
+    emb   = model.encode(texts, convert_to_tensor=True).cpu().numpy()
+    km    = KMeans(n_clusters=n_topics, random_state=42)
+    labels= km.fit_predict(emb)
+
+    # Group into topic buckets
     topics = []
     for t in range(n_topics):
-        topics.append([seg for seg,lab in zip(segments, labels) if lab==t])
+        topics.append([seg for seg, lab in zip(segments, labels) if lab == t])
     return topics
 
 def summarize_meeting(segments, n_topics, top_n):
@@ -107,34 +95,40 @@ def summarize_meeting(segments, n_topics, top_n):
         summary = generate_extractive_summary(topic, top_n)
         for seg in summary:
             rows.append({
-                'Topic':     t_idx,
-                'Speaker':   seg['speaker'],
-                'Utterance': seg['text_clean']
+                "Topic":     t_idx,
+                "Speaker":   seg["speaker"],
+                "Utterance": seg["text_clean"][:80] + ("…" if len(seg["text_clean"])>80 else "")
             })
+    if not rows:
+        st.error("No summary could be generated (no data).")
     return pd.DataFrame(rows)
 
-# —— Streamlit UI —— 
+# ─── Streamlit UI ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="AMI Meeting Summarizer", layout="wide")
 st.title("AMI IHM Meeting Summarization Demo")
 
-# Sidebar controls
+# Sidebar: choose from the small list of meeting_ids
 st.sidebar.header("⚙️ Parameters")
-meeting_ids = sorted({item['meeting_id'] for item in load_ami_dataset()})
-sel_meeting = st.sidebar.selectbox("Select meeting_id", meeting_ids)
-n_topics    = st.sidebar.slider("Number of topics (clusters)", 2, 10, 5)
-top_n       = st.sidebar.slider("Utterances per topic", 1, 5, 3)
+meeting_ids = sorted({r["meeting_id"] for r in load_ami_dataset()})
+sel = st.sidebar.selectbox("Select meeting_id", meeting_ids)
+n_topics = st.sidebar.slider("Number of topics (clusters)", 2, 10, 5)
+top_n    = st.sidebar.slider("Utterances per topic", 1, 5, 3)
 
-# Load & show raw segments
+# Show raw data
 with st.expander("▶️ View raw segments"):
-    segs = get_meeting_segments(sel_meeting)
-    df_raw = pd.DataFrame(segs)
-    st.experimental_data_editor(df_raw, num_rows="dynamic", key="raw")
+    segs   = get_meeting_segments(sel)
+    if segs:
+        df_raw = pd.DataFrame(segs)
+        st.dataframe(df_raw, use_container_width=True)
 
-# Summarize button
+# Summarize on demand
 if st.button("📝 Generate summary"):
-    with st.spinner("Clustering & summarizing..."):
-        df_summary = summarize_meeting(segs, n_topics, top_n)
-    st.subheader("Extractive Summary by Topic")
-    st.dataframe(df_summary, use_container_width=True)
+    segs = get_meeting_segments(sel)
+    if segs:
+        with st.spinner("Clustering & summarizing..."):
+            df_sum = summarize_meeting(segs, n_topics, top_n)
+        st.subheader("Extractive Summary by Topic")
+        st.dataframe(df_sum, use_container_width=True)
+
 
 
