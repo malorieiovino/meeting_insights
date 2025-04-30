@@ -64,11 +64,11 @@ def generate_extractive_summary(segments, top_n=3):
 # —— Dataset & preprocessing —— 
 @st.cache_data(show_spinner=False)
 def load_ami_dataset():
-	here = os.path.dirname(__file__)
-	fp = os.path.join(here, "data", "ami_processed_meetings_fast.pkl")
-	with open(fp, "rb") as f:
-		records = pickle.load(f)
-	return records
+    # Read our small sample CSV instead of unpickling
+    df = pd.read_csv("data/sample_meeting.csv")
+    # Convert to list of dicts for downstream code
+    return df.to_dict(orient="records")
+	
 def clean_segment_text(text):
     text = ANNOT_RE.sub("", text)
     text = FILLER_RE.sub("", text)
