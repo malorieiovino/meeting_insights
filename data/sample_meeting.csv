@@ -1,0 +1,21 @@
+meeting_id,speaker,begin_time,end_time,text_clean
+EN2001a,Alice,0.0,1.35,"Good morning everyone, let's begin our quarterly planning meeting."
+EN2001a,Bob,1.36,3.1,"Sure, I have the agenda ready: metrics review, targets, and resource allocation."
+EN2001a,Carol,3.11,5.0,I'd like to discuss the marketing campaign results—they performed above expectations.
+EN2001a,Alice,5.01,6.2,"Great news, Carol. Bob, could you share the sales figures now?"
+EN2001a,Bob,6.21,8.0,Absolutely: we saw a 15% increase in new subscriptions month-over-month.
+EN2001a,Carol,8.01,9.3,Fantastic. Action item: prepare detailed campaign analytics by Friday.
+EN2001a,Dave,9.31,11.0,"Switching gears, let's review our product roadmap for Q3."
+EN2001a,Eve,11.01,12.45,We need to finalize feature prioritization by next Wednesday.
+EN2001a,Frank,12.46,14.1,I can draft the roadmap doc and circulate by Tuesday afternoon.
+EN2001a,Alice,14.11,15.3,"Perfect, thank you Frank. Any blockers before we wrap up?"
+EN2001b,Dave,0.0,1.5,Welcome back—today we're focusing on the infrastructure upgrade status.
+EN2001b,Eve,1.51,3.2,We've completed the database migration but performance testing is pending.
+EN2001b,Frank,3.21,5.0,Latency spikes under load were detected; we'll debug this week.
+EN2001b,Dave,5.01,6.55,That sounds critical—what's the expected fix timeline?
+EN2001b,Eve,6.56,8.3,The team aims to complete debugging and retesting by Wednesday.
+EN2001b,Frank,8.31,10.0,Understood. Action: send performance logs and debug report by tomorrow.
+EN2001b,Dave,10.01,11.45,Let's also plan a maintenance window next month—suggest dates please.
+EN2001b,Eve,11.46,13.2,"How about the second week of July, maybe July 10th to 12th?"
+EN2001b,Frank,13.21,15.0,I'll coordinate with the ops team and confirm availability by Friday.
+EN2001b,Dave,15.01,16.3,Excellent. Any final thoughts before we adjourn?
